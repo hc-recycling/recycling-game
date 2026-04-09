@@ -205,10 +205,13 @@ function attempt(itemEl,binType,binEl){
     binEl.classList.add("flash-ok");
     setTimeout(()=>binEl.classList.remove("flash-ok"),600);
     const name=itemEl.dataset.name;
-    queue=queue.filter(x=>x.name!==name);
+    const qIdx=queue.findIndex(x=>x.name===name);
+    if(qIdx>-1)queue.splice(qIdx,1);
     itemEl.remove();
     if(done>=TOTAL){endGame();return}
-    if(!document.querySelector(".item"))renderItems();
+    setTimeout(()=>{
+      if(!document.querySelector(".item"))renderItems();
+    },50);
   } else {
     showFeedback("✗ 再想想！",false);
     binEl.classList.add("flash-err");
