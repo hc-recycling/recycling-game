@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>垃圾分類大挑戰</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f7ec;font-family:'Helvetica Neue',Arial,sans-serif;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:1rem}
+#g{width:100%;max-width:500px}
+
+#title{text-align:center;margin-bottom:0.75rem}
+#title h1{font-size:18px;font-weight:600;color:#3B6D11;letter-spacing:0.5px}
+#title p{font-size:12px;color:#639922;margin-top:3px}
+
+#topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;padding:0.6rem 1rem;background:#EAF3DE;border-radius:12px;border:1px solid #C0DD97}
+.stat{text-align:center}
+.stat-label{font-size:10px;color:#3B6D11;font-weight:600;letter-spacing:0.4px}
+.stat-val{font-size:22px;font-weight:600;color:#27500A}
+
+#prog-wrap{margin-bottom:0.75rem}
+#prog-bar{height:6px;background:#C0DD97;border-radius:3px;overflow:hidden}
+#prog-fill{height:100%;background:#3B6D11;border-radius:3px;transition:width 0.4s}
+#prog-label{font-size:11px;color:#639922;text-align:right;margin-top:3px}
+
+#item-area{min-height:130px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center;padding:1rem;background:#fff;border-radius:16px;border:1.5px dashed #97C459;margin-bottom:0.75rem;position:relative}
+#item-area-label{position:absolute;top:6px;left:10px;font-size:10px;color:#97C459;font-weight:600}
+
+.item{background:#fff;border:1.5px solid #C0DD97;border-radius:14px;padding:10px 12px;cursor:grab;transition:transform 0.15s,border-color 0.15s,box-shadow 0.15s;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:72px}
+.item:hover{border-color:#3B6D11;transform:translateY(-3px);box-shadow:0 4px 12px rgba(59,109,17,0.15)}
+.item:active{cursor:grabbing}
+.item.dragging{opacity:0.3}
+.item-emoji{font-size:28px;line-height:1}
+.item-name{font-size:11px;color:#5F5E5A;font-weight:600;text-align:center}
+
+#bins{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:0.75rem}
+.bin{border-radius:16px;border:2px dashed;padding:14px 4px;text-align:center;min-height:95px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;transition:transform 0.15s,background 0.2s}
+.bin.over{transform:scale(1.07)}
+.bin-emoji{font-size:30px;line-height:1}
+.bin-name{font-size:12px;font-weight:600}
+
+#bin-general{background:#F7F5F0;border-color:#B4B2A9;color:#5F5E5A}
+#bin-general.over{background:#E8E5DC}
+#bin-recycle{background:#E6F1FB;border-color:#378ADD;color:#185FA5}
+#bin-recycle.over{background:#B5D4F4}
+#bin-food{background:#EAF3DE;border-color:#639922;color:#3B6D11}
+#bin-food.over{background:#C0DD97}
+
+#feedback{min-height:24px;text-align:center;font-size:14px;font-weight:600;margin-bottom:0.4rem}
+
+@keyframes flashG{0%,100%{background:inherit}40%{background:#C0DD97}}
+@keyframes flashR{0%,100%{background:inherit}40%{background:#fcc}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.flash-ok{animation:flashG 0.5s}
+.flash-err{animation:flashR 0.4s,shake 0.35s}
+
+.timer-warn{color:#D85A30!important}
+
+#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;z-index:100}
+#overlay.show{display:flex}
+#obox{background:#fff;border-radius:20px;padding:2.5rem 2rem;text-align:center;max-width:300px;width:90%}
+#o-icon{font-size:52px;line-height:1;margin-bottom:0.75rem}
+#o-title{font-size:22px;font-weight:700;margin-bottom:0.5rem;color:#27500A}
+#o-sub{font-size:14px;color:#5F5E5A;margin-bottom:1.5rem;line-height:1.7}
+.o-btn{width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px;border:none}
+#o-retry{background:#EAF3DE;color:#3B6D11}
+#o-retry:hover{background:#C0DD97}
+#o-line{background:#06C755;color:#fff;display:none}
+#o-line:hover{background:#05a847}
+</style>
+</head>
+<body>
+<div id="g">
+  <div id="title">
+    <h1>♻️ 垃圾分類大挑戰</h1>
+    <p>把垃圾拖到正確的桶子，答錯可以重試！</p>
+  </div>
+
+  <div id="topbar">
+    <div class="stat"><div class="stat-label">分數</div><div class="stat-val" id="score-val">0</div></div>
+    <div class="stat"><div class="stat-label">剩餘時間</div><div class="stat-val" id="timer-val">90</div></div>
+    <div class="stat"><div class="stat-label">已答對</div><div class="stat-val" id="done-val">0/20</div></div>
+  </div>
+
+  <div id="prog-wrap">
+    <div id="prog-bar"><div id="prog-fill" style="width:0%"></div></div>
+    <div id="prog-label">進度 0 / 20</div>
+  </div>
+
+  <div id="item-area">
+    <span id="item-area-label">待分類</span>
+  </div>
+
+  <div id="feedback"></div>
+
+  <div id="bins">
+    <div class="bin" id="bin-general" data-type="一般垃圾">
+      <div class="bin-emoji">🗑️</div>
+      <div class="bin-name">一般垃圾</div>
+    </div>
+    <div class="bin" id="bin-recycle" data-type="資源回收">
+      <div class="bin-emoji">♻️</div>
+      <div class="bin-name">資源回收</div>
+    </div>
+    <div class="bin" id="bin-food" data-type="廚餘">
+      <div class="bin-emoji">🌿</div>
+      <div class="bin-name">廚餘</div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="obox">
+    <div id="o-icon"></div>
+    <div id="o-title"></div>
+    <div id="o-sub"></div>
+    <button class="o-btn" id="o-retry">再玩一次</button>
+    <button class="o-btn" id="o-line">領取抽獎連結 🎁</button>
+  </div>
+</div>
+
+<script>
+const ALL_ITEMS = [
+  {name:"飲料鐵罐",emoji:"🥫",type:"資源回收"},
+  {name:"寶特瓶",emoji:"🍶",type:"資源回收"},
+  {name:"報紙",emoji:"📰",type:"資源回收"},
+  {name:"紙箱",emoji:"📦",type:"資源回收"},
+  {name:"玻璃瓶",emoji:"🫙",type:"資源回收"},
+  {name:"鋁箔包",emoji:"🧃",type:"資源回收"},
+  {name:"洗髮霜瓶",emoji:"🧴",type:"資源回收"},
+  {name:"雜誌",emoji:"📖",type:"資源回收"},
+  {name:"牛奶盒",emoji:"🥛",type:"資源回收"},
+  {name:"上衣",emoji:"👕",type:"資源回收"},
+  {name:"蘋果皮",emoji:"🍎",type:"廚餘"},
+  {name:"香蕉皮",emoji:"🍌",type:"廚餘"},
+  {name:"蛋殼",emoji:"🥚",type:"廚餘"},
+  {name:"生菜葉",emoji:"🥬",type:"廚餘"},
+  {name:"咖啡渣",emoji:"☕",type:"廚餘"},
+  {name:"茶渣",emoji:"🍵",type:"廚餘"},
+  {name:"剩菜剩飯",emoji:"🍱",type:"廚餘"},
+  {name:"過期食品",emoji:"🥗",type:"廚餘"},
+  {name:"豆腐",emoji:"🫕",type:"廚餘"},
+  {name:"柚子皮",emoji:"🍊",type:"廚餘"},
+  {name:"衛生紙",emoji:"🧻",type:"一般垃圾"},
+  {name:"紙尿布",emoji:"👶",type:"一般垃圾"},
+  {name:"髒污塑膠袋",emoji:"🛍️",type:"一般垃圾"},
+  {name:"氣泡膜",emoji:"🫧",type:"一般垃圾"},
+  {name:"砂紙",emoji:"🪵",type:"一般垃圾"},
+  {name:"腮紅",emoji:"💄",type:"一般垃圾"},
+  {name:"矽膠耳塞",emoji:"🎧",type:"一般垃圾"},
+  {name:"塑膠膜",emoji:"🧊",type:"一般垃圾"},
+  {name:"陶砂鍋",emoji:"🍲",type:"一般垃圾"},
+  {name:"洗衣店套袋",emoji:"👗",type:"一般垃圾"},
+];
+
+const TOTAL=20, PASS=80, TIME=90;
+let queue=[],score=0,done=0,timer=TIME,interval=null,dragging=null;
+
+function shuffle(a){return [...a].sort(()=>Math.random()-0.5)}
+
+function init(){
+  score=0;done=0;timer=TIME;dragging=null;
+  document.getElementById("score-val").textContent=0;
+  document.getElementById("timer-val").textContent=TIME;
+  document.getElementById("timer-val").classList.remove("timer-warn");
+  document.getElementById("done-val").textContent="0/"+TOTAL;
+  document.getElementById("prog-fill").style.width="0%";
+  document.getElementById("prog-label").textContent="進度 0 / "+TOTAL;
+  document.getElementById("feedback").textContent="";
+  document.getElementById("overlay").classList.remove("show");
+  document.getElementById("o-line").style.display="none";
+  queue=shuffle(ALL_ITEMS).slice(0,TOTAL);
+  renderItems();
+  startTimer();
+}
+
+function renderItems(){
+  const area=document.getElementById("item-area");
+  area.innerHTML='<span id="item-area-label">待分類</span>';
+  queue.slice(0,5).forEach((item,i)=>{
+    const el=document.createElement("div");
+    el.className="item";
+    el.dataset.type=item.type;
+    el.dataset.name=item.name;
+    el.draggable=true;
+    el.innerHTML=`<span class="item-emoji">${item.emoji}</span><span class="item-name">${item.name}</span>`;
+    el.addEventListener("dragstart",e=>{dragging=el;setTimeout(()=>el.classList.add("dragging"),0)});
+    el.addEventListener("dragend",()=>{el.classList.remove("dragging");dragging=null});
+    el.addEventListener("touchstart",onTS,{passive:true});
+    el.addEventListener("touchmove",onTM,{passive:false});
+    el.addEventListener("touchend",onTE);
+    area.appendChild(el);
+  });
+}
+
+function attempt(itemEl,binType,binEl){
+  if(!itemEl)return;
+  if(itemEl.dataset.type===binType){
+    done++;score+=5;
+    document.getElementById("score-val").textContent=score;
+    document.getElementById("done-val").textContent=done+"/"+TOTAL;
+    document.getElementById("prog-fill").style.width=(done/TOTAL*100)+"%";
+    document.getElementById("prog-label").textContent="進度 "+done+" / "+TOTAL;
+    showFeedback("✓ 正確！",true);
+    binEl.classList.add("flash-ok");
+    setTimeout(()=>binEl.classList.remove("flash-ok"),600);
+    const name=itemEl.dataset.name;
+    queue=queue.filter(x=>x.name!==name);
+    itemEl.remove();
+    if(done>=TOTAL){endGame();return}
+    if(!document.querySelector(".item"))renderItems();
+  } else {
+    showFeedback("✗ 再想想！",false);
+    binEl.classList.add("flash-err");
+    setTimeout(()=>binEl.classList.remove("flash-err"),450);
+    const name=itemEl.dataset.name;
+    const idx=queue.findIndex(x=>x.name===name);
+    if(idx>-1)queue.push(queue.splice(idx,1)[0]);
+    itemEl.style.opacity="1";
+  }
+}
+
+function showFeedback(msg,ok){
+  const el=document.getElementById("feedback");
+  el.textContent=msg;
+  el.style.color=ok?"#3B6D11":"#993C1D";
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.textContent="",1000);
+}
+
+document.querySelectorAll(".bin").forEach(bin=>{
+  bin.addEventListener("dragover",e=>{e.preventDefault();bin.classList.add("over")});
+  bin.addEventListener("dragleave",()=>bin.classList.remove("over"));
+  bin.addEventListener("drop",e=>{e.preventDefault();bin.classList.remove("over");attempt(dragging,bin.dataset.type,bin)});
+});
+
+let tEl=null,tClone=null;
+function onTS(e){
+  tEl=e.currentTarget;dragging=tEl;
+  const r=tEl.getBoundingClientRect();
+  tClone=tEl.cloneNode(true);
+  Object.assign(tClone.style,{position:"fixed",left:r.left+"px",top:r.top+"px",width:r.width+"px",opacity:"0.9",zIndex:"999",pointerEvents:"none",borderRadius:"14px",background:"#fff",border:"1.5px solid #C0DD97",padding:"10px 12px",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px"});
+  document.body.appendChild(tClone);
+  tEl.style.opacity="0.3";
+}
+function onTM(e){
+  if(!tClone)return;
+  e.preventDefault();
+  const t=e.touches[0];
+  tClone.style.left=(t.clientX-40)+"px";
+  tClone.style.top=(t.clientY-55)+"px";
+  document.querySelectorAll(".bin").forEach(b=>{
+    const r=b.getBoundingClientRect();
+    (t.clientX>r.left&&t.clientX<r.right&&t.clientY>r.top&&t.clientY<r.bottom)?b.classList.add("over"):b.classList.remove("over");
+  });
+}
+function onTE(e){
+  if(!tClone)return;
+  const t=e.changedTouches[0];
+  let hit=false;
+  document.querySelectorAll(".bin").forEach(b=>{
+    b.classList.remove("over");
+    const r=b.getBoundingClientRect();
+    if(t.clientX>r.left&&t.clientX<r.right&&t.clientY>r.top&&t.clientY<r.bottom){attempt(tEl,b.dataset.type,b);hit=true}
+  });
+  if(!hit&&tEl)tEl.style.opacity="1";
+  tClone.remove();tClone=null;tEl=null;dragging=null;
+}
+
+function startTimer(){
+  clearInterval(interval);
+  interval=setInterval(()=>{
+    timer--;
+    const el=document.getElementById("timer-val");
+    el.textContent=timer;
+    if(timer<=15)el.classList.add("timer-warn");
+    if(timer<=0){clearInterval(interval);endGame()}
+  },1000);
+}
+
+function endGame(){
+  clearInterval(interval);
+  const passed=score>=PASS;
+  document.getElementById("o-icon").textContent=passed?"🎉":"😅";
+  document.getElementById("o-title").textContent=passed?"恭喜通關！":"差一點點！";
+  document.getElementById("o-sub").innerHTML=passed
+    ?`得分 <strong>${score}</strong> 分，答對 ${done}/20 題<br>你已解鎖 LINE 抽獎資格！`
+    :`得分 <strong>${score}</strong> 分，答對 ${done}/20 題<br>需要 80 分才能過關，再試一次吧！`;
+  if(passed)document.getElementById("o-line").style.display="block";
+  document.getElementById("overlay").classList.add("show");
+}
+
+document.getElementById("o-retry").addEventListener("click",init);
+document.getElementById("o-line").addEventListener("click",()=>{
+  window.open("https://line.me/R/ti/p/@你的LINE帳號","_blank");
+});
+
+init();
+</script>
+</body>
+</html>
