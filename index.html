@@ -260,14 +260,17 @@ function onTM(e){
 function onTE(e){
   if(!tClone)return;
   const t=e.changedTouches[0];
+  const savedEl=tEl;
+  tClone.remove();tClone=null;tEl=null;dragging=null;
   let hit=false;
   document.querySelectorAll(".bin").forEach(b=>{
     b.classList.remove("over");
     const r=b.getBoundingClientRect();
-    if(t.clientX>r.left&&t.clientX<r.right&&t.clientY>r.top&&t.clientY<r.bottom){attempt(tEl,b.dataset.type,b);hit=true}
+    if(t.clientX>r.left&&t.clientX<r.right&&t.clientY>r.top&&t.clientY<r.bottom){
+      attempt(savedEl,b.dataset.type,b);hit=true;
+    }
   });
-  if(!hit&&tEl)tEl.style.opacity="1";
-  tClone.remove();tClone=null;tEl=null;dragging=null;
+  if(!hit&&savedEl)savedEl.style.opacity="1";
 }
 
 function startTimer(){
