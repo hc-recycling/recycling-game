@@ -26,25 +26,24 @@ body{background:#f0f7ec;font-family:'Helvetica Neue',Arial,sans-serif;min-height
 #item-area{min-height:130px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center;padding:1rem;background:#fff;border-radius:16px;border:1.5px dashed #97C459;margin-bottom:0.75rem;position:relative}
 #item-area-label{position:absolute;top:6px;left:10px;font-size:10px;color:#97C459;font-weight:600}
 
-.item{background:#fff;border:1.5px solid #C0DD97;border-radius:14px;padding:10px 12px;cursor:grab;transition:transform 0.15s,border-color 0.15s,box-shadow 0.15s;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:72px}
-.item:hover{border-color:#3B6D11;transform:translateY(-3px);box-shadow:0 4px 12px rgba(59,109,17,0.15)}
-.item:active{cursor:grabbing}
-.item.dragging{opacity:0.3}
+.item{background:#fff;border:2px solid #C0DD97;border-radius:14px;padding:10px 12px;cursor:pointer;transition:transform 0.15s,border-color 0.15s,box-shadow 0.15s;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:72px;-webkit-tap-highlight-color:transparent}
+.item:active{transform:scale(0.95)}
+.item.selected{border-color:#3B6D11;background:#EAF3DE;transform:translateY(-4px);box-shadow:0 6px 16px rgba(59,109,17,0.25)}
 .item-emoji{font-size:28px;line-height:1}
 .item-name{font-size:11px;color:#5F5E5A;font-weight:600;text-align:center}
 
+#hint{text-align:center;font-size:12px;color:#97C459;margin-bottom:0.5rem;min-height:18px;transition:opacity 0.3s}
+
 #bins{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:0.75rem}
-.bin{border-radius:16px;border:2px dashed;padding:14px 4px;text-align:center;min-height:95px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;transition:transform 0.15s,background 0.2s}
-.bin.over{transform:scale(1.07)}
+.bin{border-radius:16px;border:2px dashed;padding:14px 4px;text-align:center;min-height:95px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;transition:transform 0.15s,background 0.2s;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.bin:active{transform:scale(0.97)}
+.bin.active-target{transform:scale(1.07);box-shadow:0 4px 14px rgba(0,0,0,0.12)}
 .bin-emoji{font-size:30px;line-height:1}
 .bin-name{font-size:12px;font-weight:600}
 
 #bin-general{background:#F7F5F0;border-color:#B4B2A9;color:#5F5E5A}
-#bin-general.over{background:#E8E5DC}
 #bin-recycle{background:#E6F1FB;border-color:#378ADD;color:#185FA5}
-#bin-recycle.over{background:#B5D4F4}
 #bin-food{background:#EAF3DE;border-color:#639922;color:#3B6D11}
-#bin-food.over{background:#C0DD97}
 
 #feedback{min-height:24px;text-align:center;font-size:14px;font-weight:600;margin-bottom:0.4rem}
 
@@ -73,7 +72,7 @@ body{background:#f0f7ec;font-family:'Helvetica Neue',Arial,sans-serif;min-height
 <div id="g">
   <div id="title">
     <h1>♻️ 垃圾分類大挑戰</h1>
-    <p>把垃圾拖到正確的桶子，答錯可以重試！</p>
+    <p>點選物品，再點桶子完成分類！</p>
   </div>
 
   <div id="topbar">
@@ -91,6 +90,7 @@ body{background:#f0f7ec;font-family:'Helvetica Neue',Arial,sans-serif;min-height
     <span id="item-area-label">待分類</span>
   </div>
 
+  <div id="hint">👆 點選一個物品</div>
   <div id="feedback"></div>
 
   <div id="bins">
@@ -154,12 +154,12 @@ const ALL_ITEMS = [
 ];
 
 const TOTAL=20, PASS=80, TIME=90;
-let queue=[],score=0,done=0,timer=TIME,interval=null,dragging=null;
+let queue=[],score=0,done=0,timer=TIME,interval=null,selected=null;
 
 function shuffle(a){return [...a].sort(()=>Math.random()-0.5)}
 
 function init(){
-  score=0;done=0;timer=TIME;dragging=null;
+  score=0;done=0;timer=TIME;selected=null;
   document.getElementById("score-val").textContent=0;
   document.getElementById("timer-val").textContent=TIME;
   document.getElementById("timer-val").classList.remove("timer-warn");
@@ -167,8 +167,10 @@ function init(){
   document.getElementById("prog-fill").style.width="0%";
   document.getElementById("prog-label").textContent="進度 0 / "+TOTAL;
   document.getElementById("feedback").textContent="";
+  document.getElementById("hint").textContent="👆 點選一個物品";
   document.getElementById("overlay").classList.remove("show");
   document.getElementById("o-line").style.display="none";
+  document.querySelectorAll(".bin").forEach(b=>b.classList.remove("active-target"));
   queue=shuffle(ALL_ITEMS).slice(0,TOTAL);
   renderItems();
   startTimer();
@@ -177,51 +179,77 @@ function init(){
 function renderItems(){
   const area=document.getElementById("item-area");
   area.innerHTML='<span id="item-area-label">待分類</span>';
-  queue.slice(0,5).forEach((item,i)=>{
+  selected=null;
+  document.getElementById("hint").textContent="👆 點選一個物品";
+  document.querySelectorAll(".bin").forEach(b=>b.classList.remove("active-target"));
+  queue.slice(0,5).forEach(item=>{
     const el=document.createElement("div");
     el.className="item";
     el.dataset.type=item.type;
     el.dataset.name=item.name;
-    el.draggable=true;
     el.innerHTML=`<span class="item-emoji">${item.emoji}</span><span class="item-name">${item.name}</span>`;
-    el.addEventListener("dragstart",e=>{dragging=el;setTimeout(()=>el.classList.add("dragging"),0)});
-    el.addEventListener("dragend",()=>{el.classList.remove("dragging");dragging=null});
-    el.addEventListener("touchstart",onTS,{passive:true});
-    el.addEventListener("touchmove",onTM,{passive:false});
-    el.addEventListener("touchend",onTE);
+    el.addEventListener("click", ()=>selectItem(el));
     area.appendChild(el);
   });
 }
 
-function attempt(itemEl,binType,binEl){
-  if(!itemEl)return;
-  if(itemEl.dataset.type===binType){
-    done++;score+=5;
-    document.getElementById("score-val").textContent=score;
-    document.getElementById("done-val").textContent=done+"/"+TOTAL;
-    document.getElementById("prog-fill").style.width=(done/TOTAL*100)+"%";
-    document.getElementById("prog-label").textContent="進度 "+done+" / "+TOTAL;
-    showFeedback("✓ 正確！",true);
-    binEl.classList.add("flash-ok");
-    setTimeout(()=>binEl.classList.remove("flash-ok"),600);
-    const name=itemEl.dataset.name;
-    const qIdx=queue.findIndex(x=>x.name===name);
-    if(qIdx>-1)queue.splice(qIdx,1);
-    itemEl.remove();
-    if(done>=TOTAL){endGame();return}
-    setTimeout(()=>{
-      if(!document.querySelector(".item"))renderItems();
-    },50);
-  } else {
-    showFeedback("✗ 再想想！",false);
-    binEl.classList.add("flash-err");
-    setTimeout(()=>binEl.classList.remove("flash-err"),450);
-    const name=itemEl.dataset.name;
-    const idx=queue.findIndex(x=>x.name===name);
-    if(idx>-1)queue.push(queue.splice(idx,1)[0]);
-    itemEl.style.opacity="1";
+function selectItem(el){
+  // 取消舊選取
+  document.querySelectorAll(".item").forEach(i=>i.classList.remove("selected"));
+  if(selected===el){
+    // 再點一次同一個 = 取消選取
+    selected=null;
+    document.getElementById("hint").textContent="👆 點選一個物品";
+    document.querySelectorAll(".bin").forEach(b=>b.classList.remove("active-target"));
+    return;
   }
+  selected=el;
+  el.classList.add("selected");
+  document.getElementById("hint").textContent="👇 點選要丟入的桶子";
+  document.querySelectorAll(".bin").forEach(b=>b.classList.add("active-target"));
 }
+
+document.querySelectorAll(".bin").forEach(bin=>{
+  bin.addEventListener("click",()=>{
+    if(!selected) return;
+    const itemEl=selected;
+    const binType=bin.dataset.type;
+    selected=null;
+    document.querySelectorAll(".bin").forEach(b=>b.classList.remove("active-target"));
+
+    if(itemEl.dataset.type===binType){
+      // 答對
+      done++;score+=5;
+      document.getElementById("score-val").textContent=score;
+      document.getElementById("done-val").textContent=done+"/"+TOTAL;
+      document.getElementById("prog-fill").style.width=(done/TOTAL*100)+"%";
+      document.getElementById("prog-label").textContent="進度 "+done+" / "+TOTAL;
+      showFeedback("✓ 正確！",true);
+      bin.classList.add("flash-ok");
+      setTimeout(()=>bin.classList.remove("flash-ok"),600);
+      const name=itemEl.dataset.name;
+      const qIdx=queue.findIndex(x=>x.name===name);
+      if(qIdx>-1)queue.splice(qIdx,1);
+      itemEl.remove();
+      if(done>=TOTAL){endGame();return}
+      const remaining=document.getElementById("item-area").querySelectorAll(".item").length;
+      if(remaining===0) setTimeout(renderItems,100);
+      else {
+        document.getElementById("hint").textContent="👆 點選一個物品";
+      }
+    } else {
+      // 答錯
+      showFeedback("✗ 再想想！",false);
+      bin.classList.add("flash-err");
+      setTimeout(()=>bin.classList.remove("flash-err"),450);
+      itemEl.classList.remove("selected");
+      const name=itemEl.dataset.name;
+      const idx=queue.findIndex(x=>x.name===name);
+      if(idx>-1)queue.push(queue.splice(idx,1)[0]);
+      document.getElementById("hint").textContent="👆 點選一個物品";
+    }
+  });
+});
 
 function showFeedback(msg,ok){
   const el=document.getElementById("feedback");
@@ -229,48 +257,6 @@ function showFeedback(msg,ok){
   el.style.color=ok?"#3B6D11":"#993C1D";
   clearTimeout(el._t);
   el._t=setTimeout(()=>el.textContent="",1000);
-}
-
-document.querySelectorAll(".bin").forEach(bin=>{
-  bin.addEventListener("dragover",e=>{e.preventDefault();bin.classList.add("over")});
-  bin.addEventListener("dragleave",()=>bin.classList.remove("over"));
-  bin.addEventListener("drop",e=>{e.preventDefault();bin.classList.remove("over");attempt(dragging,bin.dataset.type,bin)});
-});
-
-let tEl=null,tClone=null;
-function onTS(e){
-  tEl=e.currentTarget;dragging=tEl;
-  const r=tEl.getBoundingClientRect();
-  tClone=tEl.cloneNode(true);
-  Object.assign(tClone.style,{position:"fixed",left:r.left+"px",top:r.top+"px",width:r.width+"px",opacity:"0.9",zIndex:"999",pointerEvents:"none",borderRadius:"14px",background:"#fff",border:"1.5px solid #C0DD97",padding:"10px 12px",display:"flex",flexDirection:"column",alignItems:"center",gap:"3px"});
-  document.body.appendChild(tClone);
-  tEl.style.opacity="0.3";
-}
-function onTM(e){
-  if(!tClone)return;
-  e.preventDefault();
-  const t=e.touches[0];
-  tClone.style.left=(t.clientX-40)+"px";
-  tClone.style.top=(t.clientY-55)+"px";
-  document.querySelectorAll(".bin").forEach(b=>{
-    const r=b.getBoundingClientRect();
-    (t.clientX>r.left&&t.clientX<r.right&&t.clientY>r.top&&t.clientY<r.bottom)?b.classList.add("over"):b.classList.remove("over");
-  });
-}
-function onTE(e){
-  if(!tClone)return;
-  const t=e.changedTouches[0];
-  const savedEl=tEl;
-  tClone.remove();tClone=null;tEl=null;dragging=null;
-  let hit=false;
-  document.querySelectorAll(".bin").forEach(b=>{
-    b.classList.remove("over");
-    const r=b.getBoundingClientRect();
-    if(t.clientX>r.left&&t.clientX<r.right&&t.clientY>r.top&&t.clientY<r.bottom){
-      attempt(savedEl,b.dataset.type,b);hit=true;
-    }
-  });
-  if(!hit&&savedEl)savedEl.style.opacity="1";
 }
 
 function startTimer(){
